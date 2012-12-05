@@ -8,7 +8,6 @@ import "crypto/md5"
 
 var booksMap = make(map[int64][]string)
 
-
 func addBook(path string, info os.FileInfo, err error) error {
 	if !info.IsDir() {
 		booksMap[info.Size()] = append(booksMap[info.Size()], path)
