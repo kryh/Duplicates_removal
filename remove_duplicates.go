@@ -4,9 +4,10 @@ import "fmt"
 import "os"
 import "path/filepath"
 import "io/ioutil"
-import "crypto/md5"
+import "crypto/sha1"
 
 var booksMap = make(map[int64][]string)
+
 
 func addBook(path string, info os.FileInfo, err error) error {
 	if !info.IsDir() {
@@ -20,12 +21,13 @@ func addBooksToMap(folder string) {
 }
 
 func calculateChecksum(filename string) string {
+	fmt.Println("Calculating sha1 for file: " + filename)
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		fmt.Println("Error during opening " + filename)
 		return ""
 	}
-	h := md5.New()
+	h := sha1.New()
 	h.Write(data)
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
