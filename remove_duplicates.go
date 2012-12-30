@@ -1,10 +1,13 @@
 package main
 
-import "fmt"
-import "os"
-import "path/filepath"
-import "io/ioutil"
-import "crypto/sha1"
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"io/ioutil"
+	"crypto/sha1"
+	"runtime" //GOMAXPROCS(NumCPU())
+)
 
 var booksMap = make(map[int64][]string)
 
@@ -20,37 +23,53 @@ func addBooksToMap(folder string) {
 	filepath.Walk(folder, addBook)
 }
 
-func calculateChecksum(filename string) string {
-	fmt.Println("Calculating sha1 for file: " + filename)
+func calculateChecksum(filename string, channel chan string) {
+	fmt.Println("Calc sha1 for: " + filename)
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		fmt.Println("Error during opening " + filename)
-		return ""
+		return
 	}
 	h := sha1.New()
 	h.Write(data)
-	return fmt.Sprintf("%x", h.Sum(nil))
+	channel <- fmt.Sprintf("%x", h.Sum(nil))
 }
 
 func main() {
- 	addBooksToMap("_Przeczytane")
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	addBooksToMap("_Przeczytane")
 	addBooksToMap("_Przeczytane_do_przejrzenia")
 	addBooksToMap("Sorted")
 	addBooksToMap("Unsorted")
-	
-	mapHashFilename := make(map[string]string)
+
+ 	mapHashFilename := make(map[string]string)
 	
 	for _, names := range booksMap {
-		if len(names) > 1 {
-			for /*index*/_, bookname := range names {
-				calculatedHash := calculateChecksum(bookname)
-				if _,ok := mapHashFilename[calculatedHash]; !ok {  //check if hash already exists
-					mapHashFilename[calculatedHash] = bookname
-				} else {
-					fmt.Println("Removing book: ", bookname)
-					os.Remove(bookname)
-				}
+		numberOfFilesWithTheSameSize := len(names)
+		
+		if numberOfFilesWithTheSameSize > 1 {
+			
+			//create enough channels to handle checksum calculation for all files with particular size
+			channels := make([]chan string, numberOfFilesWithTheSameSize)
+			
+			for i:=0; i<numberOfFilesWithTheSameSize; i++ {
+				channels[i] = make(chan string)
+				
+				go calculateChecksum(names[i], channels[i])
 			}
-		}
+			
+			for i:=0; i<numberOfFilesWithTheSameSize; i++ {
+				bookname := names[i]
+				calculatedHash := <-channels[i]
+				
+ 				if _,ok := mapHashFilename[calculatedHash]; !ok {  //check if hash already exists
+ 					mapHashFilename[calculatedHash] = bookname
+ 				} else {
+ 					fmt.Println("Removing book: ", bookname, "\n")
+					os.Remove(bookname)
+ 				}
+			}
+ 		}
 	}
 }
