@@ -7,10 +7,11 @@ import (
 	"io/ioutil"
 	"crypto/sha1"
 	"runtime" //GOMAXPROCS(NumCPU())
+	"sync"
 )
 
 var booksMap = make(map[int64][]string)
-
+var done chan bool
 
 func addBook(path string, info os.FileInfo, err error) error {
 	if !info.IsDir() {
@@ -35,41 +36,61 @@ func calculateChecksum(filename string, channel chan string) {
 	channel <- fmt.Sprintf("%x", h.Sum(nil))
 }
 
+func handleTableOfBooksWithTheSameSize(listOfBooks []string, mapHashFile map[string]string, mutex *sync.Mutex) {
+	numberOfFilesWithTheSameSize := len(listOfBooks)
+	
+	//create enough channels to handle checksum calculation for all files with particular size
+	channels := make([]chan string, numberOfFilesWithTheSameSize)
+	
+	for i:=0; i<numberOfFilesWithTheSameSize; i++ {
+		channels[i] = make(chan string)
+		
+		go calculateChecksum(listOfBooks[i], channels[i])
+	}
+	
+	for i:=0; i<numberOfFilesWithTheSameSize; i++ {
+		bookname := listOfBooks[i]
+		calculatedHash := <-channels[i]
+	
+		mutex.Lock()
+		if _,ok := mapHashFile[calculatedHash]; !ok {  //check if hash already exists
+			mapHashFile[calculatedHash] = bookname
+		} else {
+			fmt.Println("Remove:", bookname, "\n")
+			os.Remove(bookname)
+		}
+		mutex.Unlock()
+	}
+	done <- true
+}
+
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
+	done = make(chan bool)
 
 	addBooksToMap("_Przeczytane")
 	addBooksToMap("_Przeczytane_do_przejrzenia")
 	addBooksToMap("Sorted")
 	addBooksToMap("Unsorted")
 
- 	mapHashFilename := make(map[string]string)
+	mapHashFilename := make(map[string]string)
+	mutex := new(sync.Mutex)
+	
+	numberOfGoroutinesToWaitFor := 0
+	for _, names := range booksMap {
+		if len(names) > 1 {
+			numberOfGoroutinesToWaitFor++;
+		}
+	}
 	
 	for _, names := range booksMap {
-		numberOfFilesWithTheSameSize := len(names)
-		
-		if numberOfFilesWithTheSameSize > 1 {
-			
-			//create enough channels to handle checksum calculation for all files with particular size
-			channels := make([]chan string, numberOfFilesWithTheSameSize)
-			
-			for i:=0; i<numberOfFilesWithTheSameSize; i++ {
-				channels[i] = make(chan string)
-				
-				go calculateChecksum(names[i], channels[i])
-			}
-			
-			for i:=0; i<numberOfFilesWithTheSameSize; i++ {
-				bookname := names[i]
-				calculatedHash := <-channels[i]
-				
- 				if _,ok := mapHashFilename[calculatedHash]; !ok {  //check if hash already exists
- 					mapHashFilename[calculatedHash] = bookname
- 				} else {
- 					fmt.Println("Removing book: ", bookname, "\n")
-					os.Remove(bookname)
- 				}
-			}
- 		}
+		if len(names) > 1 {
+			go handleTableOfBooksWithTheSameSize(names, mapHashFilename, mutex)
+		}
+	}
+	
+	//wait until all goroutines finish
+	for i:=0; i<numberOfGoroutinesToWaitFor; i++ {
+		<- done
 	}
 }
