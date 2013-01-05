@@ -47,16 +47,16 @@ func handleTableOfBooksWithTheSameSize(listOfBooks []string, mapHashFile map[str
 		
 		go calculateChecksum(listOfBooks[i], channels[i])
 	}
-	
+		
 	for i:=0; i<numberOfFilesWithTheSameSize; i++ {
 		bookname := listOfBooks[i]
 		calculatedHash := <-channels[i]
-	
+		
 		mutex.Lock()
 		if _,ok := mapHashFile[calculatedHash]; !ok {  //check if hash already exists
 			mapHashFile[calculatedHash] = bookname
 		} else {
-			fmt.Println("Remove:", bookname, "\n")
+			fmt.Println("Remove:", bookname)
 			os.Remove(bookname)
 		}
 		mutex.Unlock()
@@ -66,7 +66,6 @@ func handleTableOfBooksWithTheSameSize(listOfBooks []string, mapHashFile map[str
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	done = make(chan bool)
 
 	addBooksToMap("_Przeczytane")
 	addBooksToMap("_Przeczytane_do_przejrzenia")
@@ -82,6 +81,8 @@ func main() {
 			numberOfGoroutinesToWaitFor++;
 		}
 	}
+	
+	done = make(chan bool, numberOfGoroutinesToWaitFor)
 	
 	for _, names := range booksMap {
 		if len(names) > 1 {
