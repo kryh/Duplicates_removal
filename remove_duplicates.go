@@ -1,11 +1,11 @@
 package main
 
 import (
+	"crypto/sha1"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
-	"io/ioutil"
-	"crypto/sha1"
 	"runtime" //GOMAXPROCS(NumCPU())
 	"sync"
 )
@@ -38,22 +38,22 @@ func calculateChecksum(filename string, channel chan string) {
 
 func handleTableOfBooksWithTheSameSize(listOfBooks []string, mapHashFile map[string]string, mutex *sync.Mutex) {
 	numberOfFilesWithTheSameSize := len(listOfBooks)
-	
+
 	//create enough channels to handle checksum calculation for all files with particular size
 	channels := make([]chan string, numberOfFilesWithTheSameSize)
-	
-	for i:=0; i<numberOfFilesWithTheSameSize; i++ {
+
+	for i := 0; i < numberOfFilesWithTheSameSize; i++ {
 		channels[i] = make(chan string)
-		
+
 		go calculateChecksum(listOfBooks[i], channels[i])
 	}
-		
-	for i:=0; i<numberOfFilesWithTheSameSize; i++ {
+
+	for i := 0; i < numberOfFilesWithTheSameSize; i++ {
 		bookname := listOfBooks[i]
 		calculatedHash := <-channels[i]
-		
+
 		mutex.Lock()
-		if _,ok := mapHashFile[calculatedHash]; !ok {  //check if hash already exists
+		if _, ok := mapHashFile[calculatedHash]; !ok { //check if hash already exists
 			mapHashFile[calculatedHash] = bookname
 		} else {
 			fmt.Println("Remove:", bookname)
@@ -74,24 +74,24 @@ func main() {
 
 	mapHashFilename := make(map[string]string)
 	mutex := new(sync.Mutex)
-	
+
 	numberOfGoroutinesToWaitFor := 0
 	for _, names := range booksMap {
 		if len(names) > 1 {
-			numberOfGoroutinesToWaitFor++;
+			numberOfGoroutinesToWaitFor++
 		}
 	}
-	
+
 	done = make(chan bool, numberOfGoroutinesToWaitFor)
-	
+
 	for _, names := range booksMap {
 		if len(names) > 1 {
 			go handleTableOfBooksWithTheSameSize(names, mapHashFilename, mutex)
 		}
 	}
-	
+
 	//wait until all goroutines finish
-	for i:=0; i<numberOfGoroutinesToWaitFor; i++ {
-		<- done
+	for i := 0; i < numberOfGoroutinesToWaitFor; i++ {
+		<-done
 	}
 }
