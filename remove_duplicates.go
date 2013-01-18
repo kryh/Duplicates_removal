@@ -76,12 +76,16 @@ func main() {
 	mutex := new(sync.Mutex)
 
 	numberOfGoroutinesToWaitFor := 0
+	for _, names := range booksMap {
+		if len(names) > 1 {
+			numberOfGoroutinesToWaitFor++
+		}
+	}
 	
 	done = make(chan bool, numberOfGoroutinesToWaitFor)
 	
 	for _, names := range booksMap {
 		if len(names) > 1 {
-			numberOfGoroutinesToWaitFor++
 			go handleTableOfBooksWithTheSameSize(names, mapHashFilename, mutex)
 		}
 	}
