@@ -13,6 +13,10 @@ import (
 var booksMap = make(map[int64][]string)
 var done chan bool
 
+const MAXNUMBEROFOPENFILES = 50
+var openFilesLimit = make(chan bool, MAXNUMBEROFOPENFILES)
+
+
 func addBook(path string, info os.FileInfo, err error) error {
 	if !info.IsDir() {
 		booksMap[info.Size()] = append(booksMap[info.Size()], path)
@@ -24,7 +28,12 @@ func addBooksToMap(folder string) {
 	filepath.Walk(folder, addBook)
 }
 
-func calculateChecksum(filename string, channel chan string) {
+func calculateChecksum(filename string, channel chan string, openFilesLimit chan bool) {
+	openFilesLimit <- true
+	defer func() {
+		<- openFilesLimit
+	}()
+
 	fmt.Println("Calc sha1 for: " + filename)
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
@@ -45,7 +54,7 @@ func handleTableOfBooksWithTheSameSize(listOfBooks []string, mapHashFile map[str
 	for i := 0; i < numberOfFilesWithTheSameSize; i++ {
 		channels[i] = make(chan string)
 
-		go calculateChecksum(listOfBooks[i], channels[i])
+		go calculateChecksum(listOfBooks[i], channels[i], openFilesLimit)
 	}
 
 	for i := 0; i < numberOfFilesWithTheSameSize; i++ {
@@ -57,7 +66,7 @@ func handleTableOfBooksWithTheSameSize(listOfBooks []string, mapHashFile map[str
 			mapHashFile[calculatedHash] = bookname
 		} else {
 			fmt.Println("Remove:", bookname)
-			os.Remove(bookname)
+ 			os.Remove(bookname)
 		}
 		mutex.Unlock()
 	}
