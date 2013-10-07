@@ -16,7 +16,7 @@ var done chan bool
 const MAXNUMBEROFOPENFILES = 50
 var openFilesLimit = make(chan bool, MAXNUMBEROFOPENFILES)
 
-
+//addBook adds a book file to map
 func addBook(path string, info os.FileInfo, err error) error {
 	if !info.IsDir() {
 		booksMap[info.Size()] = append(booksMap[info.Size()], path)
@@ -28,6 +28,7 @@ func addBooksToMap(folder string) {
 	filepath.Walk(folder, addBook)
 }
 
+//calculateChecksum gets checksum of a file
 func calculateChecksum(filename string, channel chan string, openFilesLimit chan bool) {
 	openFilesLimit <- true
 	defer func() {
@@ -77,7 +78,6 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	addBooksToMap("_Przeczytane")
-	addBooksToMap("_Przeczytane_do_przejrzenia")
 	addBooksToMap("Sorted")
 	addBooksToMap("Unsorted")
 
