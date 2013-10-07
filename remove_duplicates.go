@@ -11,9 +11,10 @@ import (
 )
 
 var booksMap = make(map[int64][]string)
-var done chan bool
+var wg = new(sync.WaitGroup)
 
-const MAXNUMBEROFOPENFILES = 50
+
+const MAXNUMBEROFOPENFILES = 80
 var openFilesLimit = make(chan bool, MAXNUMBEROFOPENFILES)
 
 //addBook adds a book file to map
@@ -71,7 +72,8 @@ func handleTableOfBooksWithTheSameSize(listOfBooks []string, mapHashFile map[str
 		}
 		mutex.Unlock()
 	}
-	done <- true
+
+	wg.Done()
 }
 
 func main() {
@@ -83,24 +85,13 @@ func main() {
 
 	mapHashFilename := make(map[string]string)
 	mutex := new(sync.Mutex)
-
-	numberOfGoroutinesToWaitFor := 0
-	for _, names := range booksMap {
-		if len(names) > 1 {
-			numberOfGoroutinesToWaitFor++
-		}
-	}
-	
-	done = make(chan bool, numberOfGoroutinesToWaitFor)
 	
 	for _, names := range booksMap {
 		if len(names) > 1 {
+			wg.Add(1)
 			go handleTableOfBooksWithTheSameSize(names, mapHashFilename, mutex)
 		}
 	}
 
-	//wait until all goroutines finish
-	for i := 0; i < numberOfGoroutinesToWaitFor; i++ {
-		<-done
-	}
+	wg.Wait()
 }
