@@ -13,13 +13,30 @@ import (
 var booksMap = make(map[int64][]string)
 var wg = new(sync.WaitGroup)
 
+type response struct {
+	position int
+	hash string
+}
 
-const MAXNUMBEROFOPENFILES = 80
+type request struct {
+	position int
+	filename string
+	respchan chan response
+}
+
+const START_RED = "\x1b[31;1m"
+const START_GREEN = "\x1b[32;1m"
+const END_COLOR = "\x1b[0m"
+
+const MAXNUMBEROFOPENFILES = 50
 var openFilesLimit = make(chan bool, MAXNUMBEROFOPENFILES)
+
+var REDUCED_SIZE int64 = 0
+
 
 //addBook adds a book file to map
 func addBook(path string, info os.FileInfo, err error) error {
-	if !info.IsDir() {
+	if info.Mode().IsRegular() {	//handle only regular files, no folders, symlinks etc
 		booksMap[info.Size()] = append(booksMap[info.Size()], path)
 	}
 	return err
@@ -30,45 +47,53 @@ func addBooksToMap(folder string) {
 }
 
 //calculateChecksum gets checksum of a file
-func calculateChecksum(filename string, channel chan string, openFilesLimit chan bool) {
+func calculateChecksum(req *request) {
 	openFilesLimit <- true
 	defer func() {
 		<- openFilesLimit
 	}()
 
-	fmt.Println("Calc sha1 for: " + filename)
-	data, err := ioutil.ReadFile(filename)
+ 	fmt.Println("Calc sha1 for: " + req.filename)
+	data, err := ioutil.ReadFile(req.filename)
 	if err != nil {
-		fmt.Println("Error during opening " + filename)
+		fmt.Println("Error during opening " + req.filename)
 		return
 	}
 	h := sha1.New()
 	h.Write(data)
-	channel <- fmt.Sprintf("%x", h.Sum(nil))
+	req.respchan <- response{position:req.position, hash:fmt.Sprintf("%x", h.Sum(nil))}
 }
 
-func handleTableOfBooksWithTheSameSize(listOfBooks []string, mapHashFile map[string]string, mutex *sync.Mutex) {
+
+func handleTableOfBooksWithTheSameSize(bookSize int64, listOfBooks []string, mapHashFile map[string]string, mutex *sync.Mutex) {
 	numberOfFilesWithTheSameSize := len(listOfBooks)
 
 	//create enough channels to handle checksum calculation for all files with particular size
-	channels := make([]chan string, numberOfFilesWithTheSameSize)
+	channel := make(chan response, numberOfFilesWithTheSameSize)
 
-	for i := 0; i < numberOfFilesWithTheSameSize; i++ {
-		channels[i] = make(chan string)
-
-		go calculateChecksum(listOfBooks[i], channels[i], openFilesLimit)
+	for i := 0; i < numberOfFilesWithTheSameSize; i++ {		
+		go calculateChecksum(&request{position:i, filename:listOfBooks[i], respchan:channel})
 	}
 
+	sliceOfHashStrings := make([]string, numberOfFilesWithTheSameSize)
+	
+	for i := 0; i< numberOfFilesWithTheSameSize; i++ {
+		tempResp := <- channel
+		sliceOfHashStrings[tempResp.position] = tempResp.hash
+	}
+	
 	for i := 0; i < numberOfFilesWithTheSameSize; i++ {
 		bookname := listOfBooks[i]
-		calculatedHash := <-channels[i]
+		calculatedHash := sliceOfHashStrings[i]
 
 		mutex.Lock()
 		if _, ok := mapHashFile[calculatedHash]; !ok { //check if hash already exists
 			mapHashFile[calculatedHash] = bookname
 		} else {
-			fmt.Println("Remove:", bookname)
+			
+			fmt.Println(START_RED+"Removing:", bookname, END_COLOR)
  			os.Remove(bookname)
+			REDUCED_SIZE += bookSize
 		}
 		mutex.Unlock()
 	}
@@ -86,12 +111,14 @@ func main() {
 	mapHashFilename := make(map[string]string)
 	mutex := new(sync.Mutex)
 	
-	for _, names := range booksMap {
+	for bookSize, names := range booksMap {
 		if len(names) > 1 {
 			wg.Add(1)
-			go handleTableOfBooksWithTheSameSize(names, mapHashFilename, mutex)
+			go handleTableOfBooksWithTheSameSize(bookSize, names, mapHashFilename, mutex)
 		}
 	}
 
 	wg.Wait()
+	
+	fmt.Printf(START_GREEN+"Removed: %d MB.\n"+END_COLOR, REDUCED_SIZE/1024/1024)
 }
