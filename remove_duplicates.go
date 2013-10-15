@@ -48,11 +48,6 @@ func addBooksToMap(folder string) {
 
 //calculateChecksum gets checksum of a file
 func calculateChecksum(req *request) {
-	openFilesLimit <- true
-	defer func() {
-		<- openFilesLimit
-	}()
-
  	fmt.Println("Calc sha1 for: " + req.filename)
 	data, err := ioutil.ReadFile(req.filename)
 	if err != nil {
@@ -71,8 +66,17 @@ func handleTableOfBooksWithTheSameSize(bookSize int64, listOfBooks []string, map
 	//create enough channels to handle checksum calculation for all files with particular size
 	channel := make(chan response, numberOfFilesWithTheSameSize)
 
-	for i := 0; i < numberOfFilesWithTheSameSize; i++ {		
-		go calculateChecksum(&request{position:i, filename:listOfBooks[i], respchan:channel})
+	for i := 0; i < numberOfFilesWithTheSameSize; i++ {
+		i := i
+		/*
+		 * In a Go for loop, the loop variable is reused for each iteration, so the i variable is shared across all goroutines.
+		 * That's not what we want. We need to make sure that i is unique for each goroutine.  
+		 */
+		openFilesLimit <- true
+		go func() {
+			calculateChecksum(&request{position:i, filename:listOfBooks[i], respchan:channel})
+			<- openFilesLimit
+		}()		
 	}
 
 	sliceOfHashStrings := make([]string, numberOfFilesWithTheSameSize)
