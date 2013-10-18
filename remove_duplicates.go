@@ -69,7 +69,7 @@ func calculateChecksum2(req *request) {
 	}
 	defer file.Close()
 	
-	bufferSize := 50*1024*1024
+	const bufferSize = 50*1024*1024
 	buffer := make([]byte, bufferSize)
 	hash := sha1.New()
 	for {
