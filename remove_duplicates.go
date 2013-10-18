@@ -54,9 +54,37 @@ func calculateChecksum(req *request) {
 		fmt.Println("Error during opening " + req.filename)
 		return
 	}
-	h := sha1.New()
-	h.Write(data)
-	req.respchan <- response{position:req.position, hash:fmt.Sprintf("%x", h.Sum(nil))}
+	hash := sha1.New()
+	hash.Write(data)
+	fmt.Println(req.filename, fmt.Sprintf("%x", hash.Sum(nil)))
+	req.respchan <- response{position:req.position, hash:fmt.Sprintf("%x", hash.Sum(nil))}
+}
+
+func calculateChecksum2(req *request) {
+	fmt.Println("Calc2 sha1 for: " + req.filename)
+	file, err := os.Open(req.filename)
+	if err != nil {
+		fmt.Println("Error during opening " + req.filename)
+		return
+	}
+	defer file.Close()
+	
+	bufferSize := 50*1024*1024
+	buffer := make([]byte, bufferSize)
+	hash := sha1.New()
+	for {
+		readLength, err := file.Read(buffer)
+		if err != nil {
+			panic(err)
+		}
+		hash.Write(buffer[:readLength])
+		
+		if readLength < bufferSize {
+			break
+		}
+	}
+	fmt.Println(req.filename, fmt.Sprintf("%x", hash.Sum(nil)))
+	req.respchan <- response{position:req.position, hash:fmt.Sprintf("%x", hash.Sum(nil))}
 }
 
 
@@ -74,7 +102,7 @@ func handleTableOfBooksWithTheSameSize(bookSize int64, listOfBooks []string, map
 		 */
 		openFilesLimit <- true
 		go func() {
-			calculateChecksum(&request{position:i, filename:listOfBooks[i], respchan:channel})
+			calculateChecksum2(&request{position:i, filename:listOfBooks[i], respchan:channel})
 			<- openFilesLimit
 		}()		
 	}
