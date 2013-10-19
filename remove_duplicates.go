@@ -56,7 +56,7 @@ func calculateChecksum(req *request) {
 	}
 	hash := sha1.New()
 	hash.Write(data)
-	fmt.Println(req.filename, fmt.Sprintf("%x", hash.Sum(nil)))
+	
 	req.respchan <- response{position:req.position, hash:fmt.Sprintf("%x", hash.Sum(nil))}
 }
 
@@ -83,7 +83,7 @@ func calculateChecksum2(req *request) {
 			break
 		}
 	}
-	fmt.Println(req.filename, fmt.Sprintf("%x", hash.Sum(nil)))
+
 	req.respchan <- response{position:req.position, hash:fmt.Sprintf("%x", hash.Sum(nil))}
 }
 
