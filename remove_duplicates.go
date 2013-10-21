@@ -15,7 +15,7 @@ var wg = new(sync.WaitGroup)
 
 type response struct {
 	position int
-	hash string
+	hash     string
 }
 
 type request struct {
@@ -29,14 +29,14 @@ const START_GREEN = "\x1b[32;1m"
 const END_COLOR = "\x1b[0m"
 
 const MAXNUMBEROFOPENFILES = 40
+
 var openFilesLimit = make(chan bool, MAXNUMBEROFOPENFILES)
 
 var REDUCED_SIZE int64 = 0
 
-
 //addBook adds a book file to map
 func addBook(path string, info os.FileInfo, err error) error {
-	if info.Mode().IsRegular() {	//handle only regular files, no folders, symlinks etc
+	if info.Mode().IsRegular() { //handle only regular files, no folders, symlinks etc
 		booksMap[info.Size()] = append(booksMap[info.Size()], path)
 	}
 	return err
@@ -48,7 +48,7 @@ func addBooksToMap(folder string) {
 
 //calculateChecksum gets checksum of a file
 func calculateChecksum(req *request) {
- 	fmt.Println("Calc sha1 for: " + req.filename)
+	fmt.Println("Calc sha1 for: " + req.filename)
 	data, err := ioutil.ReadFile(req.filename)
 	if err != nil {
 		fmt.Println("Error during opening " + req.filename)
@@ -56,8 +56,8 @@ func calculateChecksum(req *request) {
 	}
 	hash := sha1.New()
 	hash.Write(data)
-	
-	req.respchan <- response{position:req.position, hash:fmt.Sprintf("%x", hash.Sum(nil))}
+
+	req.respchan <- response{position: req.position, hash: fmt.Sprintf("%x", hash.Sum(nil))}
 }
 
 func calculateChecksum2(req *request) {
@@ -68,8 +68,8 @@ func calculateChecksum2(req *request) {
 		return
 	}
 	defer file.Close()
-	
-	const bufferSize = 30*1024*1024
+
+	const bufferSize = 30 * 1024 * 1024
 	buffer := make([]byte, bufferSize)
 	hash := sha1.New()
 	for {
@@ -78,15 +78,14 @@ func calculateChecksum2(req *request) {
 			panic(err)
 		}
 		hash.Write(buffer[:readLength])
-		
+
 		if readLength < bufferSize {
 			break
 		}
 	}
-	
-	req.respchan <- response{position:req.position, hash:fmt.Sprintf("%x", hash.Sum(nil))}
-}
 
+	req.respchan <- response{position: req.position, hash: fmt.Sprintf("%x", hash.Sum(nil))}
+}
 
 func handleTableOfBooksWithTheSameSize(bookSize int64, listOfBooks []string, mapHashFile map[string]string, mutex *sync.Mutex) {
 	numberOfFilesWithTheSameSize := len(listOfBooks)
@@ -98,23 +97,23 @@ func handleTableOfBooksWithTheSameSize(bookSize int64, listOfBooks []string, map
 		i := i
 		/*
 		 * In a Go for loop, the loop variable is reused for each iteration, so the i variable is shared across all goroutines.
-		 * That's not what we want. We need to make sure that i is unique for each goroutine.  
+		 * That's not what we want. We need to make sure that i is unique for each goroutine.
 		 */
 		openFilesLimit <- true
 		go func() {
-			calculateChecksum2(&request{position:i, filename:listOfBooks[i], respchan:channel})
-			<- openFilesLimit
-			runtime.GC()	//run garbace collector to clean up buffer memory
-		}()		
+			calculateChecksum2(&request{position: i, filename: listOfBooks[i], respchan: channel})
+			<-openFilesLimit
+			runtime.GC() //run garbace collector to clean up buffer memory
+		}()
 	}
 
 	sliceOfHashStrings := make([]string, numberOfFilesWithTheSameSize)
-	
-	for i := 0; i< numberOfFilesWithTheSameSize; i++ {
-		tempResp := <- channel
+
+	for i := 0; i < numberOfFilesWithTheSameSize; i++ {
+		tempResp := <-channel
 		sliceOfHashStrings[tempResp.position] = tempResp.hash
 	}
-	
+
 	for i := 0; i < numberOfFilesWithTheSameSize; i++ {
 		bookname := listOfBooks[i]
 		calculatedHash := sliceOfHashStrings[i]
@@ -123,9 +122,9 @@ func handleTableOfBooksWithTheSameSize(bookSize int64, listOfBooks []string, map
 		if _, ok := mapHashFile[calculatedHash]; !ok { //check if hash already exists
 			mapHashFile[calculatedHash] = bookname
 		} else {
-			
+
 			fmt.Println(START_RED+"Removing:", bookname, END_COLOR)
- 			os.Remove(bookname)
+			os.Remove(bookname)
 			REDUCED_SIZE += bookSize
 		}
 		mutex.Unlock()
@@ -143,7 +142,7 @@ func main() {
 
 	mapHashFilename := make(map[string]string)
 	mutex := new(sync.Mutex)
-	
+
 	for bookSize, names := range booksMap {
 		if len(names) > 1 {
 			wg.Add(1)
@@ -152,6 +151,6 @@ func main() {
 	}
 
 	wg.Wait()
-	
+
 	fmt.Printf(START_GREEN+"Removed: %d MB.\n"+END_COLOR, REDUCED_SIZE/1024/1024)
 }
