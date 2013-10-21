@@ -28,7 +28,7 @@ const START_RED = "\x1b[31;1m"
 const START_GREEN = "\x1b[32;1m"
 const END_COLOR = "\x1b[0m"
 
-const MAXNUMBEROFOPENFILES = 50
+const MAXNUMBEROFOPENFILES = 40
 var openFilesLimit = make(chan bool, MAXNUMBEROFOPENFILES)
 
 var REDUCED_SIZE int64 = 0
@@ -69,7 +69,7 @@ func calculateChecksum2(req *request) {
 	}
 	defer file.Close()
 	
-	const bufferSize = 50*1024*1024
+	const bufferSize = 30*1024*1024
 	buffer := make([]byte, bufferSize)
 	hash := sha1.New()
 	for {
@@ -83,7 +83,7 @@ func calculateChecksum2(req *request) {
 			break
 		}
 	}
-
+	
 	req.respchan <- response{position:req.position, hash:fmt.Sprintf("%x", hash.Sum(nil))}
 }
 
@@ -104,6 +104,7 @@ func handleTableOfBooksWithTheSameSize(bookSize int64, listOfBooks []string, map
 		go func() {
 			calculateChecksum2(&request{position:i, filename:listOfBooks[i], respchan:channel})
 			<- openFilesLimit
+			runtime.GC()	//run garbace collector to clean up buffer memory
 		}()		
 	}
 
