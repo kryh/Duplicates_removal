@@ -25,7 +25,6 @@ if __name__ == '__main__':
 	#dictionary wielkosc pliku - lista nazw plikow o tej wielkosci
 	allBooks = {}
 	addBookToDictionary(allBooks, "./_Przeczytane")
-	addBookToDictionary(allBooks, "./_Przeczytane_do_przejrzenia")
 	addBookToDictionary(allBooks, "./Sorted")
 	addBookToDictionary(allBooks, "./Unsorted")
 
